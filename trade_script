@@ -1,0 +1,3 @@
+#!/bin/bash
+python trade.py
+play bell.wav
