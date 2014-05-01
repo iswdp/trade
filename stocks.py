@@ -1,6 +1,7 @@
 import urllib, re, datetime, random
 from pandas import DataFrame
 import pandas as pd
+import math
 
 def import_stock_price_range(symbol, start_date, end_date):
     #import stock data from yahoo finance and returns a dataframe of historical price info
@@ -91,9 +92,11 @@ def back_lag(stock_data, symbol, n = 1, OP = 'Open'):
     data = stock_data
     data['Symbol'] = symbol
     data['Ave Price'] = (data['Open'] + data['High'] + data['Low'] + data['Close']) / 4.
-    #data['Standard Volume'] = data['Volume'] * data['Ave Price']
     lag_list = []
     lag_col_names = []
+    volume = []
+    three_vma = []
+    nine_vma = []
 
     price_multiple = []
     adj_price = []
@@ -105,8 +108,7 @@ def back_lag(stock_data, symbol, n = 1, OP = 'Open'):
         adj_price.append(temp_price)
     data['Adj Multiple'] = price_multiple
     data[adj_price_name] = adj_price
-    #data = data[['Symbol', 'Adj Multiple', 'Date', OP, adj_price_name, 'Standard Volume']]
-    data = data[['Symbol', 'Adj Multiple', 'Date', OP]]
+    data = data[['Symbol', 'Adj Multiple', 'Date', OP, 'Volume']]
     data['tOpen'] = data[OP]
 
     for i in range(n):
@@ -119,11 +121,35 @@ def back_lag(stock_data, symbol, n = 1, OP = 'Open'):
     for i in range(n, len(data)):
         for j in range(len(lag_list)):
             lag_list[j].append((data[OP][i]/(data[OP][i - (j + 1)])) - 1)
+    for i in range(0,len(data)):
+        if len(volume) == 0:
+            volume.append(0)
+        else:
+            volume.append(data['Volume'][i-1])
+
+    del data['Volume']
 
     lag_list = DataFrame(lag_list).T
     lag_list.columns = lag_col_names
     
     data = pd.concat([data, lag_list], axis = 1)
+    data['Volume'] = volume
+    data['Volume'] = data['Volume'] * data[OP]
+
+    for i in range(len(data)):
+        if i < 3:
+            three_vma.append(0)
+        else:
+            three_vma.append(sum(data['Volume'][(i-3):i])/3.)
+
+        if i < 9:
+            nine_vma.append(0)
+        else:
+            nine_vma.append(sum(data['Volume'][(i-9):i])/9.)
+
+    data['three_vma'] = three_vma
+    data['nine_vma'] = nine_vma
+
     data = data.ix[n:,:].reset_index()
 
     return data

@@ -19,13 +19,16 @@ def prediction_back_lag(stock_data, symbol, n = 1, OP = 'Open'):
     data = stock_data
     data['Symbol'] = symbol
     data['Ave Price'] = (data['Open'] + data['High'] + data['Low'] + data['Close']) / 4.
-    #data['Standard Volume'] = data['Volume'] * data['Ave Price']
     lag_list = []
     lag_col_names = []
 
     price_multiple = []
     adj_price = []
     adj_price_name = 'Adj ' + str(OP)
+
+    volume = []
+    three_vma = []
+    nine_vma = []
 
     for i in range(len(data)):
         temp = stock_data['Close'][i] / stock_data['Adj Close'][i]
@@ -35,7 +38,7 @@ def prediction_back_lag(stock_data, symbol, n = 1, OP = 'Open'):
         
     data['Adj Multiple'] = price_multiple
     data[adj_price_name] = adj_price
-    data = data[['Symbol', 'Adj Multiple', 'Date', OP]]
+    data = data[['Symbol', 'Adj Multiple', 'Date', OP, 'Volume']]
     data['tOpen'] = data[OP]
     data = pd.concat([data, DataFrame(data.ix[len(data)-1,:]).T], axis = 0).reset_index()
     del data['index']
@@ -56,11 +59,34 @@ def prediction_back_lag(stock_data, symbol, n = 1, OP = 'Open'):
     for i in range(n, len(data)):
         for j in range(len(lag_list)):
             lag_list[j].append((data[OP][i]/(data[OP][i - (j + 1)])) - 1)
+    for i in range(0,len(data)):
+        if len(volume) == 0:
+            volume.append(0)
+        else:
+            volume.append(data['Volume'][i-1])
+
+    del data['Volume']
 
     lag_list = DataFrame(lag_list).T
     lag_list.columns = lag_col_names
     
     data = pd.concat([data, lag_list], axis = 1)
+    data['Volume'] = volume
+    data['Volume'] = data['Volume'] * data[OP]
+
+    for i in range(len(data)):
+        if i < 3:
+            three_vma.append(0)
+        else:
+            three_vma.append(sum(data['Volume'][(i-3):i])/3.)
+
+        if i < 9:
+            nine_vma.append(0)
+        else:
+            nine_vma.append(sum(data['Volume'][(i-9):i])/9.)
+
+    data['three_vma'] = three_vma
+    data['nine_vma'] = nine_vma
     data = data.ix[n:,:].reset_index()
 
     return data
@@ -130,8 +156,11 @@ def main():
     train = train.dropna(axis=0)
     test = test.dropna(axis=0)
 
+    #print train.head().T
+    #print test.head().T
+
     print 'Fitting\n'
-    m = RandomForestRegressor(n_estimators=1000, n_jobs=10)
+    m = RandomForestRegressor(n_estimators=500, n_jobs=10)
     m.fit(train.ix[:,5:], train.ix[:,4])
     print 'Predicting\n'
     preds = m.predict(test.ix[:,4:])
